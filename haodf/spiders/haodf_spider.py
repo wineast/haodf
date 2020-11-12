@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import logging
+
 import pypinyin
 import scrapy
 import copy
@@ -7,11 +9,48 @@ from scrapy import Request
 
 from haodf.items import HaodfItem
 
+logger = logging.getLogger("haodfLogger")
 
 class HaodfSpiderSpider(scrapy.Spider):
     name = 'haodf_spider'
     allowed_domains = ['haodf.com']
     start_urls = ['https://www.haodf.com/']
+    # 少最后一个page参数, page直接append上去
+    PAGE_URL_FORMATTER = 'https://www.haodf.com/jibing/{}/daifu_{}_{}_{}_{}_{}_{}_'
+    HDF_REGION_LIST = [
+        # ['北京', 'beijing'],
+        ['天津', 'tianjin']
+        # ,
+        # ['河北', 'hebei'],
+        # ['山西', 'sx'],
+        # ['内蒙古', 'neimenggu'],
+        # ['辽宁', 'liaoning'],
+        # ['吉林', 'jilin'],
+        # ['黑龙江', 'heilongjiang'],
+        # ['上海', 'shanghai'],
+        # ['江苏', 'jiangsu'],
+        # ['浙江', 'zhejiang'],
+        # ['安徽', 'anhui'],
+        # ['福建', 'fujian'],
+        # ['江西', 'jiangxi'],
+        # ['山东', 'shandong'],
+        # ['河南', 'henan'],
+        # ['湖北', 'hubei'],
+        # ['湖南', 'hunan'],
+        # ['广东', 'guangdong'],
+        # ['广西', 'guangxi'],
+        # ['海南', 'hainan'],
+        # ['重庆', 'chongqing'],
+        # ['四川', 'sichuan'],
+        # ['贵州', 'guizhou'],
+        # ['云南', 'neimenggu'],
+        # ['西藏', 'xizang'],
+        # ['陕西', 'shanxi'],
+        # ['甘肃', 'gansu'],
+        # ['青海', 'qinghai'],
+        # ['宁夏', 'ningxia'],
+        # ['新疆', 'xinjiang']
+    ]
 
     def pinyinSimple(self, word):
         s = ''
@@ -159,30 +198,88 @@ class HaodfSpiderSpider(scrapy.Spider):
     #         yield item
     #         # yield Request(department_url, meta={'department': copy.deepcopy(item)}, callback=self.parseDoctorList, dont_filter=True)
 
-    #################################爬取上海（某一省份）的所有医院的所有科室的所有医生的信息############################
-    def parse(self, response):
-        filename = './doctor_cancer.json'
+
+
+    def start_requests(self):
+        # 拼装链接
+        # region_list = self.settings.getlist['REGION_LIST']
+        region_list = self.HDF_REGION_LIST
+        url_format = self.settings['URL_FORMATTER']
+
+        filename = './doctor_cancer_prod.json'
         with open(filename, 'r', encoding='utf-8') as fp:
             diseaseList = json.load(fp)
+        diseaseSet = set('')
 
         for disease in diseaseList:
-            item = HaodfItem()
-            # item['hospital'] = disease['']
-            item['disease'] = disease['type']
-            disease_href_root = disease['disease_href']
-            totalPage = disease["page"]
-            isExtract = disease["enabled"]
-            if isExtract:
-                for pageNum in range(1,totalPage+1):
-                    disease_href = disease_href_root.format(str(pageNum))
-                    yield Request(disease_href, meta={'disease': copy.deepcopy(item)}, callback=self.parseDoctorList,
-                              dont_filter=True)
+
+            isExtract = disease.get('enabled',True)
+            if not isExtract:
+                logger.warning("{} not enabled to crawler".format(diseaseType))
+                continue
+
+            # fix me here,如果type没有值怎么办
+            diseaseType = disease.get('type','')
+            if len(diseaseType) == 0:
+                logger.warning("no disease type is found, just continue")
+                continue
+
+            # 检查是否在已经取过了
+            if diseaseType in diseaseSet:
+                logger.warning("{} is in the crawler list".format(diseaseType))
+                continue
+            else:
+                diseaseSet.add(diseaseType)
+            # 默认情况下，链接地址由 病名的拼音构成，有些情况需要人为介入
+            diseaseTypePinyinRaw = disease.get('type_pinyin', '')
+            if len(diseaseTypePinyinRaw) == 0:
+                diseaseTypePinyin = self.pinyinSimple(diseaseType)
+            else:
+                diseaseTypePinyin = diseaseTypePinyinRaw
+
+            pageEnd = disease.get('page_end',100)
+
+            # 根据地区组装爬虫链接
+            for region in region_list:
+                urlToCrawler = url_format.format(diseaseTypePinyin,region[1],'all','all','all','all','all','1')
+                pageUrlToCrawler = self.PAGE_URL_FORMATTER.format(diseaseTypePinyin,region[1],'all','all','all','all','all')
+                logger.info('start crawler: ' + urlToCrawler)
+                # yield Request(url[0], self.parse)
+                # yield Request(disease_href, meta={'disease': copy.deepcopy(item)}, callback=self.parseDoctorList, dont_filter=True)
+                yield Request(urlToCrawler, meta={'region': region[0],'diseaseType':diseaseType,'pageEnd':pageEnd,'pageUrlToCrawler':pageUrlToCrawler}, callback=self.parse, dont_filter=True)
+
+    def parse(self, response):
+        region = response.meta['region']
+        diseaseType = response.meta['diseaseType']
+        pageEnd = response.meta['pageEnd']
+        pageUrlToCrawler = response.meta['pageUrlToCrawler']
+
+        # 查找start-end 页面
+        totalPageList = response.xpath("//div[@class='page_turn']/a[@class='page_turn_a']/span/font/text()")
+        # 有且仅有一页
+        doctornameList = response.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]/p/a/text()")
+
+        if len(totalPageList) == 0:
+            if len(doctornameList) == 0:
+                logger.warning("no page found for this {},{},{}".format(region,diseaseType,pageUrlToCrawler))
+                return
+            else:
+                totalPage = 1
+        else:
+            totalPage = totalPageList[0].extract()
+
+        for pageNum in range(1,int(totalPage)+1):
+            pageUrl = pageUrlToCrawler + str(pageNum) + '.htm'
+            logger.info('page url is: ' + pageUrl)
+            yield Request(pageUrl, meta={'region': region,'diseaseType':diseaseType,'pageEnd':pageEnd,'pageUrl':pageUrl}, callback=self.parseDoctorList, dont_filter=True)
 
     def parseDoctorList(self, response):
-        item = response.meta['disease']
+        item = HaodfItem()
+        region = response.meta['region']
+        diseaseType = response.meta['diseaseType']
+        pageUrl = response.meta['pageUrl']
 
         doctorList = response.xpath("//li[@class='hp_doc_box_serviceStar']")
-        i = 0
         for doctor in doctorList:
             # bioUrl = doctor.xpath("//div[@class='doctor_photo_serviceStar']/div/p[contains(@class,'doc_head3')]/a/@href")[0].extract()
             # doctorname = doctor.xpath("//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]/p/a/text()")[0].extract()
@@ -192,16 +289,28 @@ class HaodfSpiderSpider(scrapy.Spider):
 
             bioUrl = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div/p[contains(@class,'doc_head3')]/a/@href")[0].extract()
             doctorname = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]/p/a/text()")[0].extract()
-            title = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//span[@class='ml15']/text()")[0].extract()
-            hospital = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//span[@class='ml10']/text()")[0].extract()
-            skill =  doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//p[contains(text(),'擅长')]/text()")[0].extract()
+            titleList = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//span[@class='ml15']/text()")
+            if len(titleList) == 0:
+                title = ''
+            else:
+                title = titleList[0].extract()
 
+            hospital = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//span[@class='ml10']/text()")[0].extract()
+            skill = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//p[contains(text(),'擅长')]/text()")[0].extract()
+            scoreList = doctor.xpath(".//div[@class='doctor_photo_serviceStar']/div[contains(@class,'lh180')]//span[@class='patient_recommend']/a/i/text()")
+            if len(scoreList) == 0:
+                score = ''
+            else:
+                score = scoreList[0].extract()
+            # http://www.360doc.com/content/09/1211/21/178233_10904192.shtml
             item['name'] = self.extractName(doctorname)
             item['pinyin'] = self.pinyinSimple(item['name'])
-            item['province'] = ''
+            item['province'] = region
             item['city'] = ''
             item['hospital'] = hospital
+            item['score'] = score
 
+            # select distinct hospital from doctor_raw where department = '' and hospital not like '%中心%' and hospital not like '%工作室%' and hospital not like '%门诊部%'
             dList = hospital.split('院')
             if len(dList) > 1:
                 if dList[-1].startswith(')'):
@@ -214,26 +323,7 @@ class HaodfSpiderSpider(scrapy.Spider):
             item['title'] = title
             item['skill'] = skill.strip()
             item['bio_url'] = bioUrl
-            # i = i + 1
+            item['source_url'] = pageUrl
+            item['disease'] = diseaseType
 
-            yield item
-        # isPage_num = response.xpath("//div[@class='p_bar']/a[@class='p_text']/text()").extract()
-        # if isPage_num:
-        #     page_num = re.findall(r"\d+", isPage_num[0])[0]
-        #     for p in range(1, int(page_num) + 1):
-        #         dephref_sig = dephref[:-4] + "/menzhen_{}.htm".format(p)
-        #         yield Request(dephref_sig, meta={'doctor': copy.deepcopy(item)}, callback=self.parseEachDoctorList, dont_filter=True)
-        # else:
-        #     yield Request(dephref, meta={'doctor': copy.deepcopy(item)}, callback=self.parseEachDoctorList, dont_filter=True)
-
-    def parseEachDoctorList(self, response):
-        item = response.meta['doctor']
-        doctorlists = response.xpath("//table[@id='doc_list_index']//tr")
-        for doctorlist in doctorlists:
-            doctorname = doctorlist.xpath("./td[@class='tdnew_a']//a/text()")[0].extract()
-            title = doctorlist.xpath("./td[@class='tdnew_a']//p/text()")[0].extract()
-            score = doctorlist.xpath("./td[@class='tdnew_b']//i[@class='bigred']/text()")[0].extract()
-            item['doctor_name'] = doctorname
-            item['doctor_title'] = title
-            item['doctor_score'] = score
             yield item

@@ -59,8 +59,8 @@ class HaodfPipeline(object):
     #     tx.execute(sql, params)
     #
     def doctor_insert(self, tx, item):
-        sql = "insert into doctor(name,pinyin,province,city,hospital,department,title,skill,disease,bio_url, modify_time,create_time) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),now())"
-        params = (item["name"], item["pinyin"], item["province"],item["city"],item["hospital"], item["department"], item["title"], item["skill"], item["disease"],item["bio_url"])
+        sql = "insert into doctor_raw(name,pinyin,province,city,hospital,department,title,skill,score,disease,bio_url,source_url,modify_time,create_time) values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),now())"
+        params = (item["name"], item["pinyin"], item["province"],item["city"],item["hospital"], item["department"], item["title"], item["skill"],item["score"], item["disease"],item["bio_url"],item["source_url"])
         tx.execute(sql, params)
 
     # 错误处理方法

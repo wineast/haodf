@@ -14,6 +14,7 @@ BOT_NAME = 'haodf'
 SPIDER_MODULES = ['haodf.spiders']
 NEWSPIDER_MODULE = 'haodf.spiders'
 
+LOG_LEVEL = 'INFO'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'haodf (+http://www.yourdomain.com)'
@@ -67,8 +68,8 @@ DOWNLOADER_MIDDLEWARES = {
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   # 'haodf.pipelines.HaodfPipeline': 300,
-   'haodf.pipelines.JsonPipeline': 300,
+   'haodf.pipelines.HaodfPipeline': 300,
+   # 'haodf.pipelines.JsonPipeline': 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -92,7 +93,7 @@ ITEM_PIPELINES = {
 #HTTPCACHE_IGNORE_HTTP_CODES = []
 #HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
-#Mysql数据库的配置信息
+#Mysql数据库的配置信息USER_AGENT
 MYSQL_HOST = '127.0.0.1'
 MYSQL_DBNAME = 'haodf'         #数据库名字
 MYSQL_USER = 'root'            #数据库账号
@@ -128,3 +129,10 @@ USER_AGENT = [
 
 # 获取cookies的网址
 COOKIES_URL = 'http://localhost:5000/weibo/random'
+
+## haodf releted
+
+# https://www.haodf.com/jibing/feiai/daifu_all_all_all_all_all_all_all.htm
+URL_FORMATTER='https://www.haodf.com/jibing/{}/daifu_{}_{}_{}_{}_{}_{}_{}.htm'
+# https://www.haodf.com/jibing/feiai/daifu_beijing_all_all_all_all_all_1.htm
+
