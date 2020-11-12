@@ -1,9 +1,4 @@
 [
-        {
-            "id": "1",
-            "type": "肺癌",
-            "page": 2,
-            "disease_href": "https://www.haodf.com/jibing/feiai/daifu_all_all_all_all_all_all_{}.htm",
-            "enabled": true
-        }
+        {"type": "骨转移癌","type_pinyin":"zhuanyixingguzhongliu"},
+        {"type": "T细胞淋巴瘤"}
 ]

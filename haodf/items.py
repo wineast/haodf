@@ -23,9 +23,13 @@ class HaodfItem(scrapy.Item):
     department = scrapy.Field()
     # 主任医师
     title = scrapy.Field()
+    # 4.1
+    score = scrapy.Field()
     # 肺癌/胃肠肿瘤精准靶向治疗、免疫治疗、疑难复发耐药，肺结节和肺癌早期诊断。最新免疫/靶向治疗药物临床试验
     skill = scrapy.Field()
     # 肺癌
     disease = scrapy.Field()
     # https://yangnong.haodf.com/
     bio_url = scrapy.Field()
+    # https://www.haodf.com/jibing/feiai/daifu_xinjiang_all_all_all_all_all_1.htm
+    source_url = scrapy.Field()
